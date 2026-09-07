@@ -1,0 +1,19 @@
+{
+  "name": "notification-service",
+  "version": "1.0.0",
+  "description": "Multi-channel notification service with outbox pattern, Kafka, gRPC, and circuit breaker",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "dotenv": "^17.4.2",
+    "kafka": "^0.2.3",
+    "pg": "^8.23.0",
+    "redis": "^6.2.1"
+  }
+}
