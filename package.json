@@ -1,19 +1,28 @@
 {
   "name": "notification-service",
   "version": "1.0.0",
+  "type": "module",
   "description": "Multi-channel notification service with outbox pattern, Kafka, gRPC, and circuit breaker",
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
-    "dev": "node --watch src/index.js"
+    "dev": "nodemon src/index.js",
+    "test": "node --test"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@grpc/grpc-js": "^1.14.4",
+    "@grpc/proto-loader": "^0.8.1",
+    "@sendbyte/node": "^0.2.1",
     "dotenv": "^17.4.2",
+    "firebase": "^12.18.0",
     "kafka": "^0.2.3",
+    "kafkajs": "^2.2.4",
+    "nodemon": "^3.1.14",
     "pg": "^8.23.0",
-    "redis": "^6.2.1"
+    "redis": "^6.2.1",
+    "twilio": "^6.1.0"
   }
 }
