@@ -57,10 +57,35 @@ export async function startOutboxRelayWorker() {
     await connectProducer();
     console.log(`[OutboxRelay] Polling every ${POLL_INTERVAL}ms, batch size: ${BATCH_SIZE}`);
 
-    const interval = setInterval(pollAndRelay, POLL_INTERVAL);
+    let isRunning = true;
+    let timerId = null;
+    let activePollPromise = null;
+
+    const scheduleNextPoll = () => {
+        if (!isRunning) return;
+        timerId = setTimeout(async () => {
+            activePollPromise = pollAndRelay().catch((err) => {
+                console.error(`[OutboxRelay] Unhandled Error during poll: `, err.message);
+            });
+
+            await activePollPromise;
+            activePollPromise = null;
+            scheduleNextPoll();
+        }, POLL_INTERVAL);
+    };
+
+    scheduleNextPoll();
 
     process.on('SIGTERM', async () => {
-        clearInterval(interval);
+        console.log(`[OutboxRelay] Shutting down...`);
+        isRunning = false;
+        if (timerId) clearTimeout(timerId);
+
+        if (activePollPromise) {
+            console.log(`[OutboxRelay] Waiting for active poll to finish...`);
+            await activePollPromise;
+        }
+        
         await disconnectProducer();
         console.log(`[OutboxRelay] Shut down gracefully`);
     });
