@@ -6,7 +6,7 @@ export const kafka = new Kafka({
     brokers: config.kafka.brokers
 });
 
-const producer = kafka.producer({
+export const producer = kafka.producer({
     allowAutoTopicCreation: true,
     idempotent: true,
     maxInFlightRequests: 1

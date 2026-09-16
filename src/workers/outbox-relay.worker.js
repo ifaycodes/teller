@@ -5,7 +5,7 @@ import { config } from "../config/index.js";
 const BATCH_SIZE = config.workers.outboxBatchSize;
 const POLL_INTERVAL = config.workers.outboxPollIntervalMs;
 
-async function pollAndRelay() {
+export async function pollAndRelay() {
     let rows;
     const scout = await pool.connect();
 
