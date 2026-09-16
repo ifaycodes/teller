@@ -58,8 +58,34 @@ export async function startOutboxRelayWorker() {
     console.log(`[OutboxRelay] Polling every ${POLL_INTERVAL}ms, batch size: ${BATCH_SIZE}`);
 
     let isRunning = true;
+    let isConnecting = true;
     let timerId = null;
     let activePollPromise = null;
+
+    const onSigterm = async () => {
+        console.log(`[OutboxRelay] SIGTERM received, initiating shutdown...`);
+        await stopWorker();
+    };
+
+    const stopWorker = async () => {
+        isRunning = false;
+        if (timerId) clearTimeout(timerId);
+
+        process.off('SIGTERM', onSigterm);
+        if (isConnecting) {
+            try { await connectProducer(); } finally {
+                isConnecting = false;
+            }
+        }
+        if (activePollPromise) {
+            console.log(`[OutboxRelay] Waiting for active poll to finish...`);
+            await activePollPromise;
+        }
+        await disconnectProducer();
+        console.log(`[OutboxRelay] Shut down gracefully`);
+    };
+
+    process.on('SIGTERM', onSigterm);
 
     const scheduleNextPoll = () => {
         if (!isRunning) return;
@@ -75,25 +101,6 @@ export async function startOutboxRelayWorker() {
     };
 
     scheduleNextPoll();
-
-    const onSigterm = async () => {
-        console.log(`[OutboxRelay] SIGTERM received, initiating shutdown...`);
-        await stopWorker();
-    };
-
-    const stopWorker = async () => {
-        isRunning = false;
-        if (timerId) clearTimeout(timerId);
-
-        process.off('SIGTERM', onSigterm);
-        if (activePollPromise) {
-            console.log(`[OutboxRelay] Waiting for active poll to finish...`);
-            await activePollPromise;
-        }
-        await disconnectProducer();
-        console.log(`[OutboxRelay] Shut down gracefully`);
-    };
-
-    process.on('SIGTERM', onSigterm);
+    
     return { stop: stopWorker };
 }

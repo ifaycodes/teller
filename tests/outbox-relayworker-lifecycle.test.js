@@ -5,14 +5,24 @@ import { producer } from '../src/kafka/producer.js';
 import { pool } from '../src/db/pool.js';
 import { startOutboxRelayWorker } from '../src/workers/outbox-relay.worker.js';
 
-test('startOutboxRelayWorker connects producer, polls, and shuts down cleanly on SIGTERM', async () => {
+test('startOutboxRelayWorker connects producer, polls, and shuts down cleanly on SIGTERM', async (t) => {
     let connectCalled = false;
     let disconnectCalled = false;
-    let pollCount = 0;
+    let notifyPollStarted;
+    const pollStarted = new Promise((resolve) => { notifyPollStarted = resolve; });
 
-    // 1. Stub connect and disconnect on the exported producer instance
+    let finishPoll;
+    const pollQueryPending = new Promise((resolve) => { finishPoll = resolve; });
+
     const origConnect = producer.connect;
     const origDisconnect = producer.disconnect;
+    const origPoolConnect = pool.connect;
+
+    t.after(() => {
+        producer.connect = origConnect;
+        producer.disconnect = origDisconnect;
+        pool.connect = origPoolConnect;
+    });
 
     producer.connect = async () => { connectCalled = true; };
     producer.disconnect = async () => { disconnectCalled = true; };
@@ -21,7 +31,8 @@ test('startOutboxRelayWorker connects producer, polls, and shuts down cleanly on
     const mockClient = {
         async query(sql) {
             if (sql.includes('SELECT id, payload FROM outbox')) {
-                pollCount++;
+                notifyPollStarted();
+                await pollQueryPending; // Wait until we allow it to finish
                 return { rows: [] };
             }
             return { rows: [] };
@@ -29,31 +40,23 @@ test('startOutboxRelayWorker connects producer, polls, and shuts down cleanly on
         release() {}
     };
 
-    const origPoolConnect = pool.connect;
     pool.connect = async () => mockClient;
 
-    try {
-        // Start worker
-        startOutboxRelayWorker();
+    // Start worker
+    const worker = await startOutboxRelayWorker();
 
-        // Verify producer.connect() was called by connectProducer()
-        assert.equal(connectCalled, true, 'Expected producer.connect to be called on startup');
+    // Verify producer.connect() was called by connectProducer()
+    assert.equal(connectCalled, true, 'Expected producer.connect to be called on startup');
 
-        // Wait a short duration (e.g., 12000ms) to let timer trigger at least one poll
-        await new Promise((r) => setTimeout(r, 12000));
-        assert.ok(pollCount > 0, 'Expected at least one poll cycle to run');
+    // Wait a short duration (e.g., 12000ms) to let timer trigger at least one poll
+    await pollStarted;
+    const shutdownPromise = worker.stop();
 
-        // Trigger SIGTERM signal programmatically to test graceful shutdown
-        process.emit('SIGTERM');
+    assert.equal(disconnectCalled, false, 'Should not disconnect producer before poll finishes');
 
-        // Wait for graceful shutdown completion
-        await new Promise((r) => setTimeout(r, 1000));
+    finishPoll(); // Allow the poll to complete
+    await shutdownPromise;
 
-        assert.equal(disconnectCalled, true, 'Expected producer.disconnect to be called on SIGTERM');
-    } finally {
-        // Restore original methods
-        producer.connect = origConnect;
-        producer.disconnect = origDisconnect;
-        pool.connect = origPoolConnect;
-    }
+    assert.equal(disconnectCalled, true, 'Expected producer.disconnect to be called after poll finishes and SIGTERM is handled');
+
 });
