@@ -2,11 +2,16 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { publish, producer } from '../src/kafka/producer.js';
 
-test('publish sends formatted message to Kafka with correct partition key and acks', async () => {
+test('publish sends formatted message to Kafka with correct partition key and acks', async (t) => {
     let sendArgs = null;
 
     // Mock producer.send
     const originalSend = producer.send;
+
+    t.after(() => {
+        producer.send = originalSend;
+    });
+
     producer.send = async (args) => {
         sendArgs = args;
         return [{ topicName: args.topic, partition: 0, errorCode: 0 }];
@@ -25,7 +30,4 @@ test('publish sends formatted message to Kafka with correct partition key and ac
     assert.equal(sendArgs.messages.length, 1);
     assert.equal(sendArgs.messages[0].key, 'notif_123');
     assert.equal(sendArgs.messages[0].value, JSON.stringify(mockMessage));
-
-    // Restore mock
-    producer.send = originalSend;
 });

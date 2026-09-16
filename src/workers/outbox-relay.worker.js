@@ -76,17 +76,24 @@ export async function startOutboxRelayWorker() {
 
     scheduleNextPoll();
 
-    process.on('SIGTERM', async () => {
-        console.log(`[OutboxRelay] Shutting down...`);
+    const onSigterm = async () => {
+        console.log(`[OutboxRelay] SIGTERM received, initiating shutdown...`);
+        await stopWorker();
+    };
+
+    const stopWorker = async () => {
         isRunning = false;
         if (timerId) clearTimeout(timerId);
 
+        process.off('SIGTERM', onSigterm);
         if (activePollPromise) {
             console.log(`[OutboxRelay] Waiting for active poll to finish...`);
             await activePollPromise;
         }
-        
         await disconnectProducer();
         console.log(`[OutboxRelay] Shut down gracefully`);
-    });
+    };
+
+    process.on('SIGTERM', onSigterm);
+    return { stop: stopWorker };
 }
