@@ -54,13 +54,11 @@ export async function pollAndRelay() {
 }
 
 export async function startOutboxRelayWorker() {
-    await connectProducer();
-    console.log(`[OutboxRelay] Polling every ${POLL_INTERVAL}ms, batch size: ${BATCH_SIZE}`);
-
     let isRunning = true;
     let isConnecting = true;
     let timerId = null;
     let activePollPromise = null;
+    let connectPromise = null;
 
     const onSigterm = async () => {
         console.log(`[OutboxRelay] SIGTERM received, initiating shutdown...`);
@@ -72,20 +70,41 @@ export async function startOutboxRelayWorker() {
         if (timerId) clearTimeout(timerId);
 
         process.off('SIGTERM', onSigterm);
-        if (isConnecting) {
-            try { await connectProducer(); } finally {
-                isConnecting = false;
+
+        if (isConnecting && connectPromise) {
+            try {
+                await connectPromise;
+            } catch {
+                console.error('[OutboxRelay] Connection failed during shutdown cleanup:', err.message);
             }
         }
+
         if (activePollPromise) {
             console.log(`[OutboxRelay] Waiting for active poll to finish...`);
             await activePollPromise;
         }
+
         await disconnectProducer();
         console.log(`[OutboxRelay] Shut down gracefully`);
     };
 
+    // Register SIGTERM listener before awaiting connection
     process.on('SIGTERM', onSigterm);
+
+    // Initiate and store connection promise
+    connectPromise = connectProducer();
+    try {
+        await connectPromise;
+    } finally {
+        isConnecting = false;
+    }
+
+    if (!isRunning) {
+        await disconnectProducer();
+        return { stop: stopWorker };
+    }
+
+    console.log(`[OutboxRelay] Polling every ${POLL_INTERVAL}ms, batch size: ${BATCH_SIZE}`);
 
     const scheduleNextPoll = () => {
         if (!isRunning) return;
@@ -101,6 +120,6 @@ export async function startOutboxRelayWorker() {
     };
 
     scheduleNextPoll();
-    
+
     return { stop: stopWorker };
 }
