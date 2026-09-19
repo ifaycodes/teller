@@ -1,6 +1,6 @@
 import { SendByte, SendByteError } from "@sendbyte/node";
 import { config } from "../../config/index.js";
-import { NotificationProvider } from "../provider.interface.js";
+import { NotificationProvider, redactRecipient } from "../provider.interface.js";
 
 class SendbyteProvider extends NotificationProvider {
     get channel() { return 'email'; }
@@ -13,13 +13,15 @@ class SendbyteProvider extends NotificationProvider {
     }
 
     async send(payload) {
-        console.log(`[Sendbyte] Sending email to: ${payload.recipient}`);
+        console.log(`[Sendbyte] Sending email to: ${redactRecipient(payload.recipient)}`);
         try {
             const message = await this.client.emails.send({
                 from: this.fromEmail,
                 to: payload.recipient,
                 subject: payload.title,
                 html: payload.html_content,
+                text: payload.message,
+                idempotencyKey: payload.idempotency_key,
             });
             console.log('[Sendbyte] Email queued with ID:', message.id);
             return { success: true, provider_message_id: message.id };

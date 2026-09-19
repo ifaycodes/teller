@@ -1,6 +1,6 @@
 import twilio from "twilio";
 import { config } from "../../config/index.js";
-import { NotificationProvider } from "../provider.interface.js";
+import { NotificationProvider, redactRecipient } from "../provider.interface.js";
 
 const { Twilio } = twilio;
 class TwilioProvider extends NotificationProvider {
@@ -18,7 +18,7 @@ class TwilioProvider extends NotificationProvider {
 
 
     async send(payload) {
-        console.log(`[Twilio] Sending SMS to: ${payload.recipient}`);
+        console.log(`[Twilio] Sending SMS to: ${redactRecipient(payload.recipient)}`);
         const message = await this.client.messages.create({
             body: payload.message,
             from: this.fromNumber,
@@ -32,7 +32,7 @@ class TwilioProvider extends NotificationProvider {
         const message = await this.client.messages(sid).fetch();
         const map = {
             delivered: 'delivered',
-            sent: 'delivered',
+            sent: 'sent',
             failed: 'failed',
             undelivered: 'failed',
             queued: 'pending',

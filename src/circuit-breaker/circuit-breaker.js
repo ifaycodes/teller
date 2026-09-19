@@ -13,6 +13,10 @@ function redisKey(channel, provider) {
     return `circuit:${channel}:${provider}`;
 }
 
+function probeKey(channel, provider) {
+    return `circuit:${channel}:${provider}:probe`;
+}
+
 const DEFAULT_STATE = {
     state: "closed",
     failure_count: 0,
@@ -29,6 +33,11 @@ async function setState(channel, provider, data) {
     await redis.set(redisKey(channel, provider), JSON.stringify(data));
 }
 
+async function claimProbe(channel, provider) {
+    const acquired = await redis.set(probeKey(channel, provider), '1', {NX: true, PX: config.circuitBreaker.probeLockMs});
+    return acquired === 'OK';
+}
+
 export async function isOpen(channel, provider) {
     const data = await getState(channel, provider);
     const cooldownSeconds = config.circuitBreaker.cooldownSeconds;
@@ -42,25 +51,33 @@ export async function isOpen(channel, provider) {
             console.log(`[Circuit] ${channel}:${provider} -> half-open (probe allowed)`);
             return false;       // to let the probe through
         }
-        console.log(`[Circuit] Channel is open, pick another one`);
+        console.log(`[Circuit] Channel - ${channel}:${provider} is open, pick another one`);
         return true;        // time has not elapsed, so it is still open
     }
 
     if (data.state === 'half-open') {
-        return false;
+        const probeAcquired = await claimProbe(channel, provider);
+        if (probeAcquired) {
+            console.log(`[Circuit] ${channel}:${provider} -> half-open (probe acquired)`);
+            return false;   // probe acquired, let it through
+        }
+        return true;    // probe acquired by another process, so subsequent attempts should be blocked until the probe is completed
     }
     return false;
 }
 
 export async function recordSuccess(channel, provider) {
     const data = await getState(channel, provider);
+    await redis.del(probeKey(channel, provider)); // release probe lock if any
     if (data.state === 'half-open') {
         await setState(channel, provider, { ...DEFAULT_STATE });
+        console.log(`[Circuit] ${channel}:${provider} -> closed (probe succeeded)`);
     }
 }
 
 export async function recordFailure(channel, provider) {
     const data = await getState(channel, provider);
+    await redis.del(probeKey(channel, provider)); // release probe lock if any
     const failureThreshold = config.circuitBreaker.failureThreshold;
 
     if (data.state === 'half-open') {
@@ -86,4 +103,12 @@ export async function recordFailure(channel, provider) {
         await setState(channel, provider, { ...data, failure_count, last_failure_at });
         console.log(`[Circuit] ${channel}:${provider} failure count: ${failure_count}`);
     }
+}
+
+export async function areAllProvidersOpen(channel, providers) {
+    for (const provider of providers) {
+        const open = await isOpen(channel, provider);
+        if (!open) return false;
+    }
+    return true;
 }
