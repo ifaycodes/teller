@@ -5,7 +5,7 @@ export class NotificationProvider {
 
     /**
      * Send a notification through this provider
-     * @param {{ recipient: string, title: string, message: string, html_content: string, idempotency_key: string }} payload
+     * @param {{ recipient: string, title?: string, message: string, html_content?: string, idempotency_key?: string }} payload
      * @returns {Promise<{ success: boolean, provider_message_id?: string, error?: string }>}
      */
     async send(payload) {

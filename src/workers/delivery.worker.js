@@ -45,13 +45,13 @@ export async function processNotification(payload) {
 
             console.log(`[Delivery] Processing attempt | channel: ${channel} | recipient: ${row.recipient}`);
             for (const provider of providers) {
-                const open = await isOpen(channel, provider);
-                if (open) {
-                    console.log(`[Delivery] ${channel}:${provider} circuit is open, trying next`);
-                    continue;
-                }
-
                 try {
+                    const open = await isOpen(channel, provider);
+                    if (open) {
+                        console.log(`[Delivery] ${channel}:${provider} circuit is open, trying next`);
+                        continue;
+                    }
+
                     const providerResponse = await sendViaProvider(channel, provider, { ...notificationData, recipient: row.recipient, idempotency_key: row.idempotency_key });
 
                     if (!providerResponse || !providerResponse.success) {
@@ -66,7 +66,7 @@ export async function processNotification(payload) {
                         `UPDATE notification_attempts SET last_used_provider = $1
                         WHERE id = $2`, [provider, row.id]
                     );
-                    await recordFailure(channel, provider);
+                    await recordFailure(channel, provider).catch(() => { /* ignore circuit breaker errors from trying to record failure to see if error is from isOpen*/ });
                     continue; // try next provider
                 }
 
