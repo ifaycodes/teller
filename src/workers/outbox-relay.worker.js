@@ -11,8 +11,13 @@ export async function pollAndRelay() {
 
     try {
         const result = await scout.query(
-            `SELECT id, payload FROM outbox WHERE published_at IS NULL
-             ORDER BY created_At ASC
+            `SELECT o.id, o.payload 
+             FROM outbox o 
+             JOIN notification_attempts na ON na.notifications.id = o.notifications_id
+             WHERE o.published_at IS NULL
+              AND na.status = 'pending'
+              AND na.updated_at <= NOW() - (POWER(2, na.attempts) || ' seconds')::INTERVAL
+             ORDER BY o.created_at ASC
              LIMIT $1`,
         [BATCH_SIZE]);
 
