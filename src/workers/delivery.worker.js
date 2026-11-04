@@ -1,6 +1,7 @@
 import { pool } from "../db/pool.js";
 import { sendViaProvider } from "../providers/provider.factory.js";
 import { recordFailure, recordSuccess, isOpen } from "../circuit-breaker/circuit-breaker.js";
+import { redactRecipient } from "../providers/provider.interface.js";
 
 const FALLBACK_CHAIN = {
     email: ['sendbyte'],
@@ -43,7 +44,7 @@ export async function processNotification(payload) {
             const providers = FALLBACK_CHAIN[channel];
             let delivered = false;
 
-            console.log(`[Delivery] Processing attempt | channel: ${channel} | recipient: ${row.recipient}`);
+            console.log(`[Delivery] Processing attempt | channel: ${channel} | recipient: ${redactRecipient(row.recipient)}`);
             for (const provider of providers) {
                 try {
                     const open = await isOpen(channel, provider);

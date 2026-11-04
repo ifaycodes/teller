@@ -14,6 +14,7 @@ export async function initConsumer() {
     await consumer.subscribe({topic, fromBeginning: false})
     
     await consumer.run({
+        eachBatchAutoResolve: false,
         eachBatch: async({ batch, resolveOffset, heartbeat, isRunning, isPaused}) => {
             console.log(`[Consumer] Received batch of ${batch.messages.length} messages from partition ${batch.partition}`);
 
@@ -54,13 +55,12 @@ export async function initConsumer() {
                 try {
                     console.log(`[Consumer] Partition ${batch.partition} received notification: ${payload.notification_id}`);
                     await processNotification(payload);
+                    resolveOffset(message.offset);
+                    await heartbeat();
                     console.log(`[Consumer] Notification sent for processing: ${payload.notification_id}`); 
                 } catch (processErr) {
                     console.error(`[Consumer] Failed to process notification ${payload.notification_id} from partition ${batch.partition}: `, processErr.message);
                 }
-
-                resolveOffset(message.offset);
-                await heartbeat();
             }
         }
     });

@@ -26,13 +26,15 @@ export function redactRecipient(recipient) {
     if (!recipient || typeof recipient !== 'string') return '***';
     // Redact Email: "john.doe@example.com" -> "j***e@example.com"
     if (recipient.includes('@')) {
-        const [name, domain] = recipient.split('@');
+        const parts = recipient.split('@');
+        if (parts.length !== 2 || !parts[0] || !parts[1]) return '***';
+        const [name, domain] = parts;
         if (name.length <= 2) return `${name[0]}*@${domain}`;
         return `${name[0]}***${name[name.length - 1]}@${domain}`;
     }
     // Redact Phone: "+1234567890" -> "+123****890"
     if (recipient.length > 6) {
-        return `${recipient.slice(0, 3)}****${recipient.slice(-3)}`;
+        return `${recipient.slice(0, 2)}****${recipient.slice(-3)}`;
     }
     return '***';
 }
